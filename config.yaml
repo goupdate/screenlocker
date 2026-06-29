@@ -1,0 +1,8 @@
+# ScreenLocker Configuration
+# session_password: временный пароль для разблокировки на ограниченное время
+# exit_password: мастер-пароль для полного выхода из программы
+# unlock_duration: длительность сессии разблокировки (формат Go duration: 1h, 30m, 1h30m)
+
+session_password: "285"
+exit_password: "mapa26"
+unlock_duration: "5s"
