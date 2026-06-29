@@ -12,6 +12,12 @@ import subprocess
 import ctypes
 from ctypes import wintypes
 from pathlib import Path
+from datetime import date
+
+# Hide console window immediately (no flicker).
+ctypes.windll.user32.ShowWindow(
+    ctypes.windll.kernel32.GetConsoleWindow(), 0  # SW_HIDE
+)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -46,6 +52,31 @@ def parse_duration(s: str) -> int:
     if num:
         total += int(num)
     return total
+
+# ---------------------------------------------------------------------------
+# State persistence (state.yaml)
+# ---------------------------------------------------------------------------
+
+def _state_path() -> str:
+    return str(Path(CONFIG_PATH).parent / "state.yaml")
+
+def load_state() -> dict:
+    """Load state from yaml. Missing/corrupt → fresh state."""
+    fp = _state_path()
+    if not os.path.exists(fp):
+        return {"last_session_date": ""}
+    try:
+        with open(fp, "r", encoding="utf-8") as f:
+            st = yaml.safe_load(f) or {}
+        return {"last_session_date": st.get("last_session_date", "")}
+    except Exception:
+        return {"last_session_date": ""}
+
+def save_state_date(date_str: str):
+    """Write last_session_date to state.yaml."""
+    fp = _state_path()
+    with open(fp, "w", encoding="utf-8") as f:
+        yaml.dump({"last_session_date": date_str}, f)
 
 # ---------------------------------------------------------------------------
 # Single instance via Windows named mutex
@@ -132,7 +163,11 @@ class LockScreen:
         self.exit_password = cfg["exit_password"]
         self.duration = parse_duration(cfg["unlock_duration"])
         
-        self.session_used = False
+        # Daily session state: if last_session_date is today → already used.
+        state = load_state()
+        self.today = date.today().isoformat()
+        self.session_used = state.get("last_session_date") == self.today
+        
         self.remaining = 0
         self.overlay_id = None
         
@@ -223,6 +258,7 @@ class LockScreen:
     
     def _start_session(self):
         self.session_used = True
+        save_state_date(self.today)
         self.remaining = self.duration
         self._show_overlay()
     

@@ -7,6 +7,6 @@
 
 session_password: "123"
 exit_password: "456"
-unlock_duration: "1h"
+unlock_duration: "5s"
 schedule_time: null
 auto_start: true
