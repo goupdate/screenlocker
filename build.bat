@@ -3,7 +3,7 @@ echo Installing pyinstaller...
 pip install pyinstaller -q
 
 echo Building screenlocker.exe...
-pyinstaller --onefile --name screenlocker screenlocker.py
+pyinstaller --onefile --noconsole --name screenlocker screenlocker.py
 
 echo.
 echo Done: screenlocker.exe
