@@ -1,8 +1,12 @@
 # ScreenLocker Configuration
-# session_password: временный пароль для разблокировки на ограниченное время
-# exit_password: мастер-пароль для полного выхода из программы
-# unlock_duration: длительность сессии разблокировки (формат Go duration: 1h, 30m, 1h30m)
+# session_password: temporary password for time-limited unlock
+# exit_password:    master password to fully exit the program
+# unlock_duration:  session unlock duration (Go-style: 1h, 30m, 1h30m)
+# schedule_time:    daily auto-start time via Task Scheduler ("06:00" or null)
+# auto_start:       add to registry Run key (start at user login)
 
-session_password: "285"
-exit_password: "mapa26"
-unlock_duration: "5s"
+session_password: "123"
+exit_password: "456"
+unlock_duration: "1h"
+schedule_time: null
+auto_start: true
