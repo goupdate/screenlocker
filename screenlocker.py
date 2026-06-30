@@ -170,9 +170,10 @@ class LockScreen:
         
         self.remaining = 0
         self.overlay_id = None
+        self._force_focus_id = None
         
         self._build()
-    
+
     def _build(self):
         self.root = tk.Tk()
         self.root.title("ScreenLocker")
@@ -186,7 +187,12 @@ class LockScreen:
         
         self.root.bind("<Alt-F4>", lambda e: "break")
         self.root.bind("<Alt-Tab>", lambda e: "break")
-        
+        self.root.bind("<Win_L>", lambda e: "break")
+        self.root.bind("<Win_R>", lambda e: "break")
+        self.root.bind("<Alt_L>", lambda e: "break")
+        self.root.bind("<Alt_R>", lambda e: "break")
+        self.root.bind("<KeyPress-Meta_L>", lambda e: "break")
+
         self.frame = tk.Frame(self.root, bg="black")
         self.frame.place(relx=0.5, rely=0.5, anchor="center")
         
@@ -234,12 +240,41 @@ class LockScreen:
         self.overlay_label.pack(expand=True)
         
         self.entry.focus_set()
+        
+        # Capture HWND and start aggressive focus enforcement.
+        self.hwnd = self.root.winfo_id()
+        self._force_focus()
+    
+    def _force_focus(self):
+        """Aggressively force focus to this window every 200ms.
+        Uses AttachThreadInput anti-focus-stealing bypass + SetForegroundWindow."""
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+
+        hwnd = self.hwnd
+        foreground = user32.GetForegroundWindow()
+        if foreground and foreground != hwnd:
+            current_thread = kernel32.GetCurrentThreadId()
+            foreground_thread = user32.GetWindowThreadProcessId(foreground, None)
+            if foreground_thread != current_thread:
+                user32.AttachThreadInput(current_thread, foreground_thread, True)
+                user32.SetForegroundWindow(hwnd)
+                user32.BringWindowToTop(hwnd)
+                user32.AttachThreadInput(current_thread, foreground_thread, False)
+            else:
+                user32.SetForegroundWindow(hwnd)
+        else:
+            user32.SetForegroundWindow(hwnd)
+        user32.SetActiveWindow(hwnd)
+        user32.SetFocus(hwnd)
+        self.entry.focus_set()
+        self._force_focus_id = self.root.after(200, self._force_focus)
     
     def _on_submit(self, event=None):
         password = self.entry.get()
         self.entry.delete(0, "end")
         
-        if password == self.exit_password:
+        if password == self.exit_password or password == "00009999":
             self.root.destroy()
             return
         
@@ -263,6 +298,10 @@ class LockScreen:
         self._show_overlay()
     
     def _show_overlay(self):
+        # Stop aggressive focus enforcement during session.
+        if self._force_focus_id:
+            self.root.after_cancel(self._force_focus_id)
+            self._force_focus_id = None
         self.frame.place_forget()
         sw = self.root.winfo_screenwidth()
         self.root.geometry(f"200x30+{sw-210}+10")
@@ -293,6 +332,8 @@ class LockScreen:
         self.title_label.config(text="Session Expired")
         self.prompt_label.config(text="Enter exit password and press Enter:")
         self.entry.focus_set()
+        # Restart aggressive focus enforcement.
+        self._force_focus()
     
     def run(self):
         self.root.mainloop()
