@@ -304,7 +304,7 @@ class LockScreen:
 def main():
     global CONFIG_PATH
     
-    CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    CONFIG_PATH = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "config.yaml")
     if not os.path.exists(CONFIG_PATH):
         print(f"Config not found: {CONFIG_PATH}", file=sys.stderr)
         sys.exit(1)
