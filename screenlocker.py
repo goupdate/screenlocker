@@ -239,7 +239,7 @@ class LockScreen:
         )
         self.overlay_label.pack(expand=True)
         
-        self.entry.focus_set()
+        self.entry.focus_force()
         
         # Capture HWND and start aggressive focus enforcement.
         self.hwnd = self.root.winfo_id()
@@ -267,7 +267,8 @@ class LockScreen:
             user32.SetForegroundWindow(hwnd)
         user32.SetActiveWindow(hwnd)
         user32.SetFocus(hwnd)
-        self.entry.focus_set()
+        self.root.update_idletasks()
+        self.entry.focus_force()
         self._force_focus_id = self.root.after(200, self._force_focus)
     
     def _on_submit(self, event=None):
@@ -331,7 +332,8 @@ class LockScreen:
         self.frame.place(relx=0.5, rely=0.5, anchor="center")
         self.title_label.config(text="Session Expired")
         self.prompt_label.config(text="Enter exit password and press Enter:")
-        self.entry.focus_set()
+        self.root.update_idletasks()
+        self.entry.focus_force()
         # Restart aggressive focus enforcement.
         self._force_focus()
     
