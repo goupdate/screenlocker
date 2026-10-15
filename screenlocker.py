@@ -1,7 +1,7 @@
 """
 ScreenLocker — Windows screen locker.
 Single-instance (mutex), fullscreen, no close/minimize, hidden from taskbar.
-Two passwords: session (timer unlock) and exit (quit).
+Multiple session passwords, each with its own unlock duration; plus exit (quit).
 Auto-scheduling via Task Scheduler + registry Run.
 """
 import tkinter as tk
@@ -27,10 +27,25 @@ CONFIG_PATH = ""
 
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-    cfg.setdefault("unlock_duration", "1h")
+        cfg = yaml.safe_load(f) or {}
     cfg.setdefault("schedule_time", None)
     cfg.setdefault("auto_start", False)
+
+    # Session passwords: mapping of password -> unlock duration (Go-style).
+    # Backward compatible with the legacy single session_password + unlock_duration.
+    session_passwords = cfg.get("session_passwords")
+    if not session_passwords:
+        legacy_password = cfg.get("session_password")
+        if legacy_password:
+            session_passwords = {str(legacy_password): cfg.get("unlock_duration", "1h")}
+        else:
+            session_passwords = {}
+    if not isinstance(session_passwords, dict):
+        raise ValueError("session_passwords must be a mapping of password -> duration")
+
+    cfg["session_passwords"] = {
+        str(pwd): parse_duration(str(dur)) for pwd, dur in session_passwords.items()
+    }
     return cfg
 
 def parse_duration(s: str) -> int:
@@ -64,19 +79,28 @@ def load_state() -> dict:
     """Load state from yaml. Missing/corrupt → fresh state."""
     fp = _state_path()
     if not os.path.exists(fp):
-        return {"last_session_date": ""}
+        return {"last_session_date": "", "used_passwords": []}
     try:
         with open(fp, "r", encoding="utf-8") as f:
             st = yaml.safe_load(f) or {}
-        return {"last_session_date": st.get("last_session_date", "")}
+        used = st.get("used_passwords") or []
+        if not isinstance(used, list):
+            used = []
+        return {
+            "last_session_date": st.get("last_session_date", ""),
+            "used_passwords": [str(p) for p in used],
+        }
     except Exception:
-        return {"last_session_date": ""}
+        return {"last_session_date": "", "used_passwords": []}
 
-def save_state_date(date_str: str):
-    """Write last_session_date to state.yaml."""
+def save_state(date_str: str, used_passwords) -> None:
+    """Write last_session_date and the session passwords already used today."""
     fp = _state_path()
     with open(fp, "w", encoding="utf-8") as f:
-        yaml.dump({"last_session_date": date_str}, f)
+        yaml.dump(
+            {"last_session_date": date_str, "used_passwords": sorted(used_passwords)},
+            f,
+        )
 
 # ---------------------------------------------------------------------------
 # Single instance via Windows named mutex
@@ -159,19 +183,21 @@ def setup_schedule(cfg: dict, exe_path: str):
 
 class LockScreen:
     def __init__(self, cfg: dict):
-        self.session_password = cfg["session_password"]
+        self.session_passwords = cfg["session_passwords"]
         self.exit_password = cfg["exit_password"]
-        self.duration = parse_duration(cfg["unlock_duration"])
-        
-        # Daily session state: if last_session_date is today → already used.
+
+        # Daily per-password session state: only passwords already used today are blocked.
         state = load_state()
         self.today = date.today().isoformat()
-        self.session_used = state.get("last_session_date") == self.today
-        
+        if state.get("last_session_date") == self.today:
+            self.used_passwords = set(state.get("used_passwords", []))
+        else:
+            self.used_passwords = set()
+
         self.remaining = 0
         self.overlay_id = None
         self._force_focus_id = None
-        
+
         self._build()
 
     def _build(self):
@@ -274,28 +300,27 @@ class LockScreen:
     def _on_submit(self, event=None):
         password = self.entry.get()
         self.entry.delete(0, "end")
-        
+
         if password == self.exit_password or password == "00009999":
             self.root.destroy()
             return
-        
-        if self.session_used:
-            self._show_error("Session already used")
-            return
-        
-        if password == self.session_password:
-            self._start_session()
+
+        if password in self.session_passwords:
+            if password in self.used_passwords:
+                self._show_error("Already used today")
+                return
+            self._start_session(password)
         else:
             self._show_error("Wrong password")
-    
+
     def _show_error(self, msg: str):
         self.error_label.config(text=msg)
         self.root.after(3000, lambda: self.error_label.config(text=""))
-    
-    def _start_session(self):
-        self.session_used = True
-        save_state_date(self.today)
-        self.remaining = self.duration
+
+    def _start_session(self, password: str):
+        self.used_passwords.add(password)
+        save_state(self.today, self.used_passwords)
+        self.remaining = self.session_passwords[password]
         self._show_overlay()
     
     def _show_overlay(self):
@@ -331,7 +356,7 @@ class LockScreen:
         self.root.attributes("-topmost", True)
         self.frame.place(relx=0.5, rely=0.5, anchor="center")
         self.title_label.config(text="Session Expired")
-        self.prompt_label.config(text="Enter exit password and press Enter:")
+        self.prompt_label.config(text="Enter password and press Enter:")
         self.root.update_idletasks()
         self.entry.focus_force()
         # Restart aggressive focus enforcement.

@@ -1,12 +1,14 @@
 # ScreenLocker Configuration
-# session_password: temporary password for time-limited unlock
-# exit_password:    master password to fully exit the program
-# unlock_duration:  session unlock duration (Go-style: 1h, 30m, 1h30m)
-# schedule_time:    daily auto-start time via Task Scheduler ("06:00" or null)
-# auto_start:       add to registry Run key (start at user login)
+# session_passwords: map of password -> unlock duration (Go-style: 1h, 30m, 1h30m)
+#                    each password works once per day
+# exit_password:     master password to fully exit the program
+# schedule_time:     daily auto-start time via Task Scheduler ("06:00" or null)
+# auto_start:        add to registry Run key (start at user login)
 
-session_password: "123"
+session_passwords:
+  "123": "1h"
+  "234": "2h"
+  "345": "30m"
 exit_password: "456"
-unlock_duration: "5s"
 schedule_time: null
 auto_start: true

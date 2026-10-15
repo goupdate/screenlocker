@@ -4,9 +4,10 @@ Windows screen locker with time-limited session unlock.
 
 - Fullscreen, always-on-top, no close/minimize buttons
 - Hidden from taskbar and Alt+Tab
-- Two passwords: **session** (timer unlock) and **exit** (quit)
+- Multiple session passwords, each with its own unlock duration (one use per password per day)
+- Exit password to quit the program
 - Session unlock shrinks window to a countdown timer in top-right corner
-- Timer expires → re-locks, session password no longer works
+- Timer expires → re-locks; another unused session password can still be entered
 - **Single instance** — only one locker runs at a time (named mutex)
 - **Auto-scheduling** — Task Scheduler daily time + registry Run at login
 
@@ -19,12 +20,18 @@ Windows screen locker with time-limited session unlock.
 
 ```yaml
 # config.yaml
-session_password: "temp123"
-exit_password: "master456"
-unlock_duration: "1h"       # Go-style: 1h, 30m, 1h30m, 90m, 10s
+session_passwords:          # password -> unlock duration (Go-style)
+  "temp123": "1h"           # each password works once per day
+  "temp456": "2h"
+  "temp789": "30m"
+exit_password: "master456"  # fully exits the program
 schedule_time: "06:00"      # daily task scheduler time, or null
 auto_start: true            # start at user login (registry Run key)
 ```
+
+Each session password unlocks for its own duration and can be used **once per day**.
+After a session expires the screen re-locks and any session password not yet used
+today can be entered. The exit password always quits the program.
 
 ## Usage
 
@@ -45,11 +52,11 @@ Requires `pyinstaller`. Produces `dist\screenlocker.exe`.
 ## State machine
 
 ```
-LOCKED ──session_password──▶ SESSION (timer overlay, not topmost)
+LOCKED ──session_password (unused today)──▶ SESSION (timer overlay, not topmost)
    │                               │
    │ exit_password                 │ timer expires
    ▼                               ▼
-  EXIT                      LOCKED (only exit_password)
+  EXIT                      LOCKED (any unused session password, or exit_password)
 ```
 
 ## License
